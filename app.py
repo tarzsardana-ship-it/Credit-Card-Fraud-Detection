@@ -8,134 +8,125 @@ model = joblib.load("credit_card_fraud_model.pkl")
 
 # ---------------- PAGE CONFIG ----------------
 st.set_page_config(
-    page_title="Fraud Detection Dashboard",
+    page_title="Bank Fraud Detection System",
     page_icon="🏦",
     layout="wide"
 )
 
 st.title("🏦 Banking Fraud Detection System")
-st.caption("AI-powered real-time transaction monitoring")
+st.caption("AI-powered real-time fraud monitoring dashboard")
 
 st.divider()
 
-# ---------------- METRICS ----------------
+# ---------------- TOP METRICS ----------------
 col1, col2, col3 = st.columns(3)
 
-with col1:
-    st.metric("System Status", "Active", "🟢")
-
-with col2:
-    st.metric("Model", "Pre-trained ML", "⚙️")
-
-with col3:
-    st.metric("Security Level", "High", "🔐")
+col1.metric("System Status", "ACTIVE", "🟢")
+col2.metric("Model", "Pre-trained ML", "⚙️")
+col3.metric("Security Level", "HIGH", "🔐")
 
 st.divider()
 
-tab1, tab2 = st.tabs(["Single Transaction", "CSV Upload"])
+tab1, tab2 = st.tabs(["Single Transaction", "Batch Analysis (CSV)"])
 
 # ======================================================
-# 🟢 SINGLE TRANSACTION
+# 🟢 SINGLE TRANSACTION (CLEAN UI - NO V FEATURES)
 # ======================================================
 with tab1:
 
-    st.subheader("Analyze Single Transaction")
+    st.subheader("Analyze Transaction")
 
-    time = st.number_input("Time", value=0.0)
+    time = st.number_input("Transaction Time", value=0.0)
+    amount = st.number_input("Transaction Amount", value=0.0)
 
-    st.markdown("### V1 - V28 Features")
+    if st.button("🔍 Analyze"):
 
-    v_features = []
-    cols = st.columns(4)
-
-    for i in range(1, 29):
-        with cols[(i - 1) % 4]:
-            v_features.append(
-                st.number_input(f"V{i}", value=0.0, key=f"v{i}")
-            )
-
-    amount = st.number_input("Amount", value=0.0)
-
-    if st.button("🔍 Analyze Transaction"):
+        # V1–V28 hidden (filled with 0)
+        v_features = [0.0] * 28
 
         input_data = np.array([[time] + v_features + [amount]])
 
-        try:
-            pred = model.predict(input_data)[0]
+        prob = model.predict_proba(input_data)[0][1]
+        pred = model.predict(input_data)[0]
 
-            prob = model.predict_proba(input_data)[0][1]
+        st.divider()
+        st.subheader("📊 Risk Analysis")
 
-            st.divider()
-            st.subheader("📊 Risk Analysis")
+        # Risk meter
+        st.progress(min(int(prob * 100), 100))
 
-            # Risk meter
-            st.progress(min(int(prob * 100), 100))
+        col1, col2 = st.columns(2)
 
-            st.write(f"🔢 Fraud Probability: **{prob:.2f}**")
-
-            # Business decision logic
-            if prob > 0.7:
-                action = "🚨 BLOCK TRANSACTION"
-                st.error(action)
-            elif prob > 0.4:
-                action = "⚠️ SEND FOR REVIEW"
-                st.warning(action)
+        with col1:
+            if pred == 1:
+                st.error("🚨 FRAUD DETECTED")
             else:
-                action = "✅ APPROVE TRANSACTION"
-                st.success(action)
+                st.success("✅ SAFE TRANSACTION")
 
-        except Exception as e:
-            st.error(f"Prediction error: {e}")
+            st.write(f"Risk Score: **{prob:.2f}**")
+
+        with col2:
+            if prob > 0.7:
+                action = "BLOCK TRANSACTION ❌"
+            elif prob > 0.4:
+                action = "SEND FOR REVIEW ⚠️"
+            else:
+                action = "APPROVE TRANSACTION ✅"
+
+            st.info(f"💼 Action: {action}")
 
 # ======================================================
-# 🔵 CSV UPLOAD
+# 🔵 CSV UPLOAD (SAFE + VISUALIZATION)
 # ======================================================
 with tab2:
 
-    st.subheader("Batch Fraud Detection (CSV)")
+    st.subheader("Batch Fraud Detection")
 
     file = st.file_uploader("Upload Transaction CSV", type=["csv"])
 
     if file is not None:
 
-        try:
-            df = pd.read_csv(file)
+        df = pd.read_csv(file)
 
-            st.write("📄 Data Preview")
-            st.dataframe(df.head())
+        st.write("📄 Data Preview")
+        st.dataframe(df.head())
 
-            expected_cols = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+        # Ensure correct structure
+        if "Time" not in df.columns or "Amount" not in df.columns:
+            st.error("CSV must contain 'Time' and 'Amount'")
+        else:
 
-            missing = [c for c in expected_cols if c not in df.columns]
+            # fill missing V1–V28
+            for i in range(1, 29):
+                if f"V{i}" not in df.columns:
+                    df[f"V{i}"] = 0.0
 
-            if missing:
-                st.error(f"Missing columns: {missing}")
+            # reorder columns
+            cols = ["Time"] + [f"V{i}" for i in range(1, 29)] + ["Amount"]
+            df = df[cols]
 
-            else:
-                df = df[expected_cols]
+            pred = model.predict(df)
+            prob = model.predict_proba(df)[:, 1]
 
-                pred = model.predict(df)
-                prob = model.predict_proba(df)[:, 1]
+            df["Fraud Prediction"] = pred
+            df["Risk Score"] = prob
 
-                df["Fraud"] = pred
-                df["Risk Score"] = prob
+            st.subheader("📊 Results")
+            st.dataframe(df)
 
-                st.subheader("📊 Results Table")
-                st.dataframe(df)
+            fraud_count = (pred == 1).sum()
+            normal_count = (pred == 0).sum()
 
-                fraud = (pred == 1).sum()
-                normal = (pred == 0).sum()
+            col1, col2 = st.columns(2)
+            col1.metric("🚨 Fraud Cases", fraud_count)
+            col2.metric("✅ Normal Cases", normal_count)
 
-                col1, col2 = st.columns(2)
-                col1.metric("🚨 Fraud Cases", fraud)
-                col2.metric("✅ Normal Cases", normal)
+            st.divider()
 
-                st.bar_chart(
-                    pd.DataFrame(
-                        {"Count": [fraud, normal]},
-                        index=["Fraud", "Normal"]
-                    )
-                )
+            # Visualization
+            chart_data = pd.DataFrame(
+                {"Count": [fraud_count, normal_count]},
+                index=["Fraud", "Normal"]
+            )
 
-        except Exception as e:
-            st.error(f"CSV Error: {e}")
+            st.bar_chart(chart_data)
