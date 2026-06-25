@@ -72,3 +72,7 @@ print("Accuracy Score on Training Set:", accuracy_score(X_train_pred, Y_train))
 #accuracy on testing data
 X_test_pred = model.predict(X_test)
 print("Accuracy Score on Testing Set:", accuracy_score(X_test_pred, Y_test))
+#save the model
+import joblib
+joblib.dump(model, "credit_card_fraud_model.pkl")
+print("\nModel saved as credit_card_fraud_model.pkl")
